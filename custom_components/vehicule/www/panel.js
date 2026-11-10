@@ -49,6 +49,8 @@ const STYLE = `
     font-size: 20px; font-weight: 500; margin: 0; flex: 1;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .bouton-entete { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; }
+  .bouton-entete ha-icon { --mdc-icon-size: 18px; }
   .km-pastille {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 4px 10px; border-radius: 999px;
@@ -249,6 +251,8 @@ const STYLE = `
     .pieces-editeur .piece-ligne input.prix { grid-column: 1 / 2; }
     .pieces-editeur .piece-ligne .total-piece { grid-column: 2 / 3; text-align: right; }
     header.barre h1 { font-size: 17px; }
+    .bouton-entete { padding: 7px 10px; }
+    .bouton-entete .libelle { display: none; }
   }
 `;
 
@@ -653,6 +657,9 @@ class VehiculePanel extends HTMLElement {
       <header class="barre">
         ${this._narrow ? `<button class="menu" data-action="menu" aria-label="Menu"><ha-icon icon="mdi:menu"></ha-icon></button>` : ""}
         <h1>${esc(nom)}</h1>
+        <button class="action primaire bouton-entete" data-action="nouvelle" title="Nouvelle intervention">
+          <ha-icon icon="mdi:plus"></ha-icon><span class="libelle">Intervention</span>
+        </button>
         <span class="km-pastille"><ha-icon icon="mdi:counter"></ha-icon>${km(kmActuel)}</span>
       </header>
       <nav class="onglets" role="tablist">
@@ -718,6 +725,8 @@ class VehiculePanel extends HTMLElement {
                   item.km != null ? ` · ${km(item.km)}` : ""
                 }${item.garage ? ` · ${esc(item.garage)}` : ""}</div>
               </div>
+              <button class="icone" title="Modifier" data-action="editer" data-id="${esc(item.id)}">
+                <ha-icon icon="mdi:pencil"></ha-icon></button>
               <button class="action primaire" data-action="marquer-fait" data-id="${esc(item.id)}">Fait</button>
             </div>`).join("")}
         </div></div>` : ""}
@@ -937,8 +946,6 @@ class VehiculePanel extends HTMLElement {
           ${annees.map((a) => `<option value="${a}" ${this._filtres.annee === a ? "selected" : ""}>${a}</option>`).join("")}
         </select>
         <input type="search" name="filtre-q" data-filtre="q" placeholder="Rechercher…" value="${esc(this._filtres.q)}">
-        <span class="espace"></span>
-        <button class="action primaire" data-action="nouvelle">+ Intervention</button>
       </div>
       ${!interventions.length
         ? `<div class="carte vide"><ha-icon icon="mdi:book-clock-outline"></ha-icon>

@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.const import Platform
 
 DOMAIN = "vehicule"
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
