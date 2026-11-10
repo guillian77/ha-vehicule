@@ -341,12 +341,17 @@ class VehiculePanel extends HTMLElement {
     this._erreur = null;
     this._narrow = false;
     this._dialogue = null; // {modele, pieces:[], intervention?}
+    this._ciblePression = null; // élément réellement pressé (anti-fermeture au glisser)
     this._filtres = { type: "all", annee: "all", statut: "all", q: "" };
     this._occupe = false;
     this._shadow.addEventListener("click", (evt) => this._onClick(evt));
     this._shadow.addEventListener("submit", (evt) => this._onSubmit(evt));
     this._shadow.addEventListener("input", (evt) => this._onInput(evt));
     this._shadow.addEventListener("change", (evt) => this._onInput(evt));
+    this._shadow.addEventListener("keydown", (evt) => this._onKeyDown(evt));
+    this._shadow.addEventListener("pointerdown", (evt) => {
+      this._ciblePression = evt.target;
+    }, true);
   }
 
   // ----------------------------------------------------------- propriétés
@@ -483,6 +488,14 @@ class VehiculePanel extends HTMLElement {
     }
     this._render();
     this._majTotalPieces();
+    this._dialogue.reference = this._etatFormulaire();
+  }
+
+  /** Empreinte du formulaire : sert à détecter une saisie en cours. */
+  _etatFormulaire() {
+    this._lireFormulaire();
+    const { form, pieces } = this._dialogue;
+    return JSON.stringify({ form, pieces });
   }
 
   /** Recalcule les totaux de pièces et propose le coût global. */
@@ -518,9 +531,22 @@ class VehiculePanel extends HTMLElement {
     if (resume) resume.textContent = chiffre ? `Pièces : ${euros(total)}` : "";
   }
 
-  _fermerDialogue() {
+  _fermerDialogue(forcer = false) {
+    // Un clic à côté de la boîte (ou une sélection qui déborde) ne doit pas
+    // jeter une saisie en cours.
+    if (!forcer && this._dialogue?.reference && this._etatFormulaire() !== this._dialogue.reference) {
+      this._toast("Saisie en cours : « Annuler » ferme sans enregistrer");
+      return;
+    }
     this._dialogue = null;
     this._render();
+  }
+
+  _onKeyDown(evt) {
+    if (evt.key === "Escape" && this._dialogue) {
+      evt.stopPropagation();
+      this._fermerDialogue(false);
+    }
   }
 
   _lireFormulaire() {
@@ -594,6 +620,11 @@ class VehiculePanel extends HTMLElement {
 
   // --------------------------------------------------------------- rendu
   _render() {
+    // Un rafraîchissement du panneau (état HA, redimensionnement) ne doit pas
+    // jeter la saisie en cours : on relit le formulaire avant de reconstruire.
+    if (this._dialogue?.reference && this._shadow.querySelector("#form-intervention")) {
+      this._lireFormulaire();
+    }
     if (this._chargement && !this._data) {
       this._shadow.innerHTML = `<style>${STYLE}</style>
         <div class="page vide"><p>Chargement du carnet…</p></div>`;
@@ -1311,10 +1342,12 @@ class VehiculePanel extends HTMLElement {
         this._allerOnglet("reglages");
         break;
       case "fermer":
-        this._fermerDialogue();
+        this._fermerDialogue(true);
         break;
       case "fermer-fond":
-        this._fermerDialogue();
+        // Fermeture seulement si l'appui ET le relâchement ont eu lieu sur le fond.
+        if (cible !== evt.target || this._ciblePression !== cible) break;
+        this._fermerDialogue(false);
         break;
       case "ajouter-piece":
         this._lireFormulaire();

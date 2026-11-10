@@ -20,6 +20,14 @@ def test_le_fichier_js_existe_et_declare_lelement():
     assert "https://" not in contenu
 
 
+def test_dialogue_protege_la_saisie_en_cours():
+    """Un clic à côté (ou un rafraîchissement) ne doit pas fermer la saisie."""
+    contenu = (DOSSIER / "www" / "panel.js").read_text(encoding="utf-8")
+    assert "_ciblePression" in contenu, "fermeture au glisser non protégée"
+    assert "Saisie en cours" in contenu, "confirmation de perte de saisie absente"
+    assert "this._lireFormulaire();\n    }\n    if (this._chargement" in contenu
+
+
 def test_version_alignee_sur_le_manifest():
     from custom_components.vehicule.const import VERSION
 
