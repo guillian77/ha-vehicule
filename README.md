@@ -6,6 +6,9 @@ automatiquement, rappels, calendrier et panneau dédié dans la barre latérale.
 Conçue pour une BMW 325i E90 (N52B25) mais entièrement paramétrable : les postes
 d'entretien et leurs intervalles sont des données, pas du code.
 
+L'intégration embarque sa propre icône (`brand/`) : elle s'affiche dans Home
+Assistant 2026.3+ sans passer par le dépôt *brands*.
+
 ## Fonctionnalités
 
 - **Journal** : interventions datées avec kilométrage, pièces (nom, quantité, référence),
