@@ -58,6 +58,7 @@ SCHEMA_PIECE = vol.Schema(
 SCHEMA_ENREGISTRER = vol.Schema(
     {
         vol.Required(ATTR_TYPE): vol.Coerce(str),
+        vol.Optional(ATTR_NOM): vol.Coerce(str),
         vol.Optional(ATTR_DATE): vol.Coerce(str),
         vol.Optional(ATTR_KM): vol.Any(None, vol.Coerce(int)),
         vol.Optional(ATTR_PIECES): vol.Any(None, [vol.Any(SCHEMA_PIECE, vol.Coerce(str))]),
@@ -73,6 +74,7 @@ SCHEMA_MODIFIER = vol.Schema(
     {
         vol.Required(ATTR_ID): vol.Coerce(str),
         vol.Optional(ATTR_TYPE): vol.Coerce(str),
+        vol.Optional(ATTR_NOM): vol.Coerce(str),
         vol.Optional(ATTR_DATE): vol.Coerce(str),
         vol.Optional(ATTR_KM): vol.Any(None, vol.Coerce(int)),
         vol.Optional(ATTR_PIECES): vol.Any(

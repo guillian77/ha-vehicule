@@ -144,6 +144,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         km = int(km) if km not in (None, "") else None
 
         poste = poste_by_id(self.postes, poste_id)
+        nom = str(data.get("nom") or "").strip() or (poste or {}).get("nom") or poste_id
         prochain = compute_prochain(
             poste,
             jour,
@@ -157,7 +158,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "date": jour.isoformat(),
             "km": km,
             "type": poste_id,
-            "nom": (poste or {}).get("nom", poste_id),
+            "nom": nom,
             "pieces": self._normaliser_pieces(data.get("pieces")),
             "cout": self._normaliser_cout(data.get("cout")),
             "garage": str(data.get("garage") or "").strip() or None,
@@ -201,6 +202,8 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if data.get("type"):
             cible["type"] = str(data["type"]).strip()
             cible["nom"] = poste_label(self.postes, cible["type"])
+        if data.get("nom"):
+            cible["nom"] = str(data["nom"]).strip()
 
         # Recalcul de l'échéance, sauf si l'utilisateur la fixe explicitement.
         if data.get("prochain_km") is not None or data.get("prochain_date"):
@@ -294,7 +297,20 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if "actif" in data:
             poste["actif"] = bool(data["actif"])
         await self._async_commit()
+        self._synchroniser_postes()
         return dict(poste)
+
+    def _synchroniser_postes(self) -> None:
+        """Demande au capteur de créer les entités des postes nouvellement suivis."""
+        callback = getattr(self, "ajouter_entites_poste", None)
+        if callback is None:
+            return
+        suivis = [
+            item["id"]
+            for item in self.data.get("echeances", [])
+            if item.get("intervalle_km") or item.get("intervalle_mois")
+        ]
+        callback(suivis)
 
     async def _async_commit(self) -> None:
         await self.storage.async_save_profil(self.profil)

@@ -211,6 +211,59 @@ async def test_calendrier_expose_les_echeances(entry, hass):
     assert any("Vidange" in evenement["summary"] for evenement in liste)
 
 
+async def test_intervention_libre_hors_postes_suivis(entry, hass, coordinator):
+    """Une intervention hors postes suivis garde son libellé, sans capteur."""
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {
+            "type": "tresse_de_masse",
+            "nom": "Tresse de masse anti-parasite",
+            "date": "2026-11-09",
+            "km": 129300,
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    intervention = coordinator.interventions[-1]
+    assert intervention["type"] == "tresse_de_masse"
+    assert intervention["nom"] == "Tresse de masse anti-parasite"
+    assert intervention["prochain"] is None
+    # Aucun poste suivi n'est créé au passage.
+    assert all(p["id"] != "tresse_de_masse" for p in coordinator.postes)
+    assert not any("tresse" in etat.entity_id for etat in hass.states.async_all("sensor"))
+
+
+async def test_poste_personnalise_cree_capteurs(entry, hass, coordinator):
+    """Un poste créé depuis les réglages obtient ses capteurs sans redémarrage."""
+    await hass.services.async_call(
+        DOMAIN,
+        "definir_poste",
+        {
+            "poste": "recherche_panne_bst",
+            "nom": "Recherche de panne BST",
+            "km": 30000,
+            "mois": 24,
+            "icone": "mdi:magnify-scan",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    poste = next(p for p in coordinator.postes if p["id"] == "recherche_panne_bst")
+    assert poste["nom"] == "Recherche de panne BST"
+    assert poste["km"] == 30000
+
+    capteurs = [
+        etat
+        for etat in hass.states.async_all("sensor")
+        if (etat.attributes.get("poste") == "recherche_panne_bst")
+    ]
+    assert capteurs, "les capteurs du poste personnalisé doivent être créés"
+    assert any(etat.entity_id.endswith("_etat") for etat in capteurs)
+
+
 async def test_definir_poste_et_maj_vehicule(entry, hass, coordinator):
     await hass.services.async_call(
         DOMAIN,

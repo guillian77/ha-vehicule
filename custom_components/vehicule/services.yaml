@@ -11,6 +11,13 @@ enregistrer_intervention:
       required: true
       selector:
         text:
+    nom:
+      name: Libellé
+      description: >-
+        Nom affiché, utile pour une intervention hors des postes suivis
+        (tresse de masse, appoint d'huile, recherche de panne…).
+      selector:
+        text:
     date:
       name: Date
       description: Date de l'intervention (AAAA-MM-JJ). Par défaut aujourd'hui.

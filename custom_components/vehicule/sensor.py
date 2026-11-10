@@ -42,13 +42,47 @@ async def async_setup_entry(
         ProchaineEcheanceSensor(coordinator),
         DerniereInterventionSensor(coordinator),
     ]
-    for poste in coordinator.data.get("echeances", []):
-        if not poste.get("intervalle_km") and not poste.get("intervalle_mois"):
-            continue
-        entities.append(KmRestantsSensor(coordinator, poste["id"]))
-        entities.append(EtatPosteSensor(coordinator, poste["id"]))
-        entities.append(JoursRestantsSensor(coordinator, poste["id"]))
+
+    entites_existantes: set[str] = set()
+
+    def _postes_suivis() -> list[str]:
+        return [
+            poste["id"]
+            for poste in coordinator.data.get("echeances", [])
+            if poste.get("intervalle_km") or poste.get("intervalle_mois")
+        ]
+
+    def _ajouter_postes(poste_ids: list[str]) -> None:
+        """Crée les capteurs des postes ajoutés après l'installation."""
+        nouveaux = [
+            poste_id
+            for poste_id in poste_ids
+            if poste_id not in entites_existantes
+            and coordinator.echeance(poste_id) is not None
+        ]
+        if not nouveaux:
+            return
+        entites_existantes.update(nouveaux)
+        async_add_entities(
+            [entite for poste_id in nouveaux for entite in _entites_poste(coordinator, poste_id)]
+        )
+
+    entites_existantes.update(_postes_suivis())
+    entities.extend(
+        entite
+        for poste_id in entites_existantes
+        for entite in _entites_poste(coordinator, poste_id)
+    )
     async_add_entities(entities)
+    coordinator.ajouter_entites_poste = _ajouter_postes
+
+
+def _entites_poste(coordinator, poste_id: str) -> list[SensorEntity]:
+    return [
+        KmRestantsSensor(coordinator, poste_id),
+        EtatPosteSensor(coordinator, poste_id),
+        JoursRestantsSensor(coordinator, poste_id),
+    ]
 
 
 class _PosteEntity(CarnetEntity):

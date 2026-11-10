@@ -245,6 +245,31 @@ const dateFr = (iso) => {
 
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
 
+// Identifiant stable d'un poste créé à la volée (accents et espaces normalisés).
+const slugId = (texte) =>
+  String(texte ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+
+const POSTE_LIBRE = "__libre__";
+
+const ICONES_POSTE = [
+  { id: "mdi:wrench", nom: "Clé (générique)" },
+  { id: "mdi:oil", nom: "Huile" },
+  { id: "mdi:air-filter", nom: "Filtre" },
+  { id: "mdi:car-brake-alert", nom: "Freins" },
+  { id: "mdi:tire", nom: "Pneus" },
+  { id: "mdi:battery-charging", nom: "Batterie / masse" },
+  { id: "mdi:flash", nom: "Allumage" },
+  { id: "mdi:water", nom: "Liquide" },
+  { id: "mdi:car-cog", nom: "Mécanique" },
+  { id: "mdi:magnify-scan", nom: "Diagnostic" },
+];
+
 const etatDe = (valeur) => ETATS[valeur] || ETATS.inconnu;
 
 const intervalleTexte = (poste) => {
@@ -380,17 +405,27 @@ class VehiculePanel extends HTMLElement {
   _ouvrirDialogue(intervention = null, typePredefini = null) {
     const postes = this._data?.postes || [];
     const vehicule = this._data?.vehicule || {};
+    const connus = postes.map((p) => p.id);
+    const typeDefaut =
+      typePredefini && connus.includes(typePredefini)
+        ? typePredefini
+        : postes[0]?.id || "vidange";
     const base = intervention || {
       date: aujourdhui(),
       km: vehicule.km_actuel ?? "",
-      type: typePredefini || postes[0]?.id || "vidange",
+      type: typeDefaut,
     };
+    // Une intervention dont le poste n'existe plus (ou saisi librement) reste
+    // modifiable : on la présente avec son libellé d'origine.
+    const libre = !!intervention && !connus.includes(intervention.type);
     this._dialogue = {
       modele: true,
       edition: !!intervention,
       form: {
         id: intervention?.id || null,
-        type: base.type || "vidange",
+        type: libre ? POSTE_LIBRE : base.type || "vidange",
+        type_original: intervention?.type || null,
+        nom_libre: libre ? intervention.nom || "" : "",
         date: base.date || aujourdhui(),
         km: base.km ?? "",
         cout: intervention?.cout ?? "",
@@ -424,6 +459,7 @@ class VehiculePanel extends HTMLElement {
     const lire = (nom) => this._shadow.querySelector(`[name="${nom}"]`)?.value ?? "";
     const form = this._dialogue.form;
     form.type = lire("type");
+    form.nom_libre = lire("nom_libre");
     form.date = lire("date");
     form.km = lire("km");
     form.cout = lire("cout");
@@ -443,8 +479,22 @@ class VehiculePanel extends HTMLElement {
   async _enregistrerDialogue() {
     this._lireFormulaire();
     const { form, pieces, edition } = this._dialogue;
+
+    // Poste libre : le libellé saisi devient le nom et sert à l'identifiant.
+    let type = form.type;
+    let nom = null;
+    if (type === POSTE_LIBRE) {
+      nom = (form.nom_libre || "").trim();
+      if (!nom) {
+        this._toast("Indique le libellé de l'intervention");
+        this._shadow.querySelector('[name="nom_libre"]')?.focus();
+        return;
+      }
+      type = (edition && form.type_original) || slugId(nom) || "intervention";
+    }
+
     const donnees = {
-      type: form.type,
+      type,
       date: form.date || aujourdhui(),
       notes: form.notes || null,
       garage: form.garage || null,
@@ -454,6 +504,7 @@ class VehiculePanel extends HTMLElement {
         ref: p.ref || null,
       })),
     };
+    if (nom) donnees.nom = nom;
     if (form.km !== "" && form.km !== null) donnees.km = Number(form.km);
     if (form.cout !== "" && form.cout !== null) donnees.cout = Number(form.cout);
     if (form.prochain_km !== "") donnees.prochain_km = Number(form.prochain_km);
@@ -746,6 +797,12 @@ class VehiculePanel extends HTMLElement {
         <select name="filtre-type" data-filtre="type">
           <option value="all">Tous les postes</option>
           ${postes.map((p) => `<option value="${esc(p.id)}" ${this._filtres.type === p.id ? "selected" : ""}>${esc(p.nom)}</option>`).join("")}
+          ${[...new Set(interventions
+            .filter((item) => !postes.some((p) => p.id === item.type))
+            .map((item) => item.type))].map((type) => {
+            const libelle = interventions.find((item) => item.type === type)?.nom || type;
+            return `<option value="${esc(type)}" ${this._filtres.type === type ? "selected" : ""}>${esc(libelle)}</option>`;
+          }).join("")}
         </select>
         <select name="filtre-annee" data-filtre="annee">
           <option value="all">Toutes les années</option>
@@ -858,7 +915,9 @@ class VehiculePanel extends HTMLElement {
     const types = Object.entries(stats.par_type || {})
       .map(([id, valeur]) => ({
         id,
-        nom: postes.find((p) => p.id === id)?.nom || id,
+        nom: postes.find((p) => p.id === id)?.nom
+          || interventions.find((item) => item.type === id)?.nom
+          || id,
         ...valeur,
       }))
       .sort((a, b) => Number(b.total) - Number(a.total));
@@ -957,6 +1016,33 @@ class VehiculePanel extends HTMLElement {
         </table>
       </div>
 
+      <div class="entete-section"><h2>Ajouter un poste</h2>
+        <span class="petit muted">Créé avec ses intervalles</span></div>
+      <form class="carte" id="form-nouveau-poste">
+        <div class="champs">
+          <label class="champ">Libellé
+            <input name="poste_nom" placeholder="Ex. Tresse de masse, recherche de panne…" autocomplete="off">
+          </label>
+          <label class="champ">Intervalle (km)
+            <input name="poste_km" type="number" min="0" step="1000" placeholder="Facultatif">
+          </label>
+          <label class="champ">Intervalle (mois)
+            <input name="poste_mois" type="number" min="0" step="1" placeholder="Facultatif">
+          </label>
+          <label class="champ">Icône
+            <select name="poste_icone">
+              ${ICONES_POSTE.map((entree) => `<option value="${esc(entree.id)}">${esc(entree.nom)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <p class="petit muted" style="margin:10px 0 0">
+          Sans intervalle, le poste sert uniquement de libellé dans le journal.
+        </p>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="action primaire" type="submit">Créer le poste</button>
+        </div>
+      </form>
+
       <div class="entete-section"><h2>Export et sauvegarde</h2></div>
       <div class="carte">
         <div class="rangee" style="flex-wrap:wrap;gap:8px">
@@ -991,8 +1077,21 @@ class VehiculePanel extends HTMLElement {
             <label class="champ">Poste
               <select name="type">
                 ${postes.map((p) => `<option value="${esc(p.id)}" ${form.type === p.id ? "selected" : ""}>${esc(p.nom)}</option>`).join("")}
+                <option value="${POSTE_LIBRE}" ${form.type === POSTE_LIBRE ? "selected" : ""}>Autre (saisie libre)…</option>
               </select>
             </label>
+            ${form.type === POSTE_LIBRE
+              ? `<label class="champ">Libellé de l'intervention
+                  <input name="nom_libre" list="postes-libres" autocomplete="off"
+                    placeholder="Ex. Tresse de masse, appoint d'huile…"
+                    value="${esc(form.nom_libre || "")}"></label>`
+              : ""}
+            <datalist id="postes-libres">
+              ${[...new Set((this._data?.interventions || [])
+                .filter((item) => !postes.some((p) => p.id === item.type))
+                .map((item) => item.nom)
+                .filter(Boolean))].map((libelle) => `<option value="${esc(libelle)}"></option>`).join("")}
+            </datalist>
             <label class="champ">Date<input name="date" type="date" value="${esc(form.date || aujourdhui())}"></label>
             <label class="champ">Kilométrage<input name="km" type="number" min="0" value="${esc(form.km ?? "")}"></label>
             <label class="champ">Coût (optionnel)<input name="cout" type="number" min="0" step="0.01" value="${esc(form.cout ?? "")}"></label>
@@ -1105,6 +1204,21 @@ class VehiculePanel extends HTMLElement {
 
   _onInput(evt) {
     const champ = evt.target;
+
+    // Dans le dialogue : le changement de poste affiche/cache la saisie libre.
+    if (this._dialogue) {
+      if (champ?.name === "type") {
+        this._lireFormulaire();
+        this._render();
+        this._shadow.querySelector('[name="nom_libre"]')?.focus();
+        return;
+      }
+      if (champ?.name === "nom_libre") {
+        this._dialogue.form.nom_libre = champ.value;
+        return;
+      }
+    }
+
     if (!champ?.dataset?.filtre) return;
     const cle = champ.dataset.filtre;
     if (cle === "q") {
@@ -1145,6 +1259,40 @@ class VehiculePanel extends HTMLElement {
         ...(date ? { date } : {}),
       });
       if (ok !== null) this._toast("Kilométrage mis à jour");
+      return;
+    }
+
+    if (formulaire.id === "form-nouveau-poste") {
+      const lire = (nom) => formulaire.querySelector(`[name="${nom}"]`)?.value ?? "";
+      const nom = lire("poste_nom").trim();
+      if (!nom) {
+        this._toast("Indique le libellé du poste");
+        formulaire.querySelector('[name="poste_nom"]')?.focus();
+        return;
+      }
+      const posteId = slugId(nom);
+      if (!posteId) {
+        this._toast("Libellé invalide");
+        return;
+      }
+      if ((this._data?.postes || []).some((p) => p.id === posteId)) {
+        this._toast(`Le poste « ${nom} » existe déjà`);
+        return;
+      }
+      const kmValeur = lire("poste_km");
+      const moisValeur = lire("poste_mois");
+      const ok = await this._appelerService("definir_poste", {
+        poste: posteId,
+        nom,
+        km: kmValeur === "" ? null : Number(kmValeur),
+        mois: moisValeur === "" ? null : Number(moisValeur),
+        icone: lire("poste_icone") || "mdi:wrench",
+        actif: true,
+      });
+      if (ok !== null) {
+        formulaire.reset();
+        this._toast("Poste créé");
+      }
       return;
     }
 

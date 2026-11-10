@@ -10,6 +10,9 @@ d'entretien et leurs intervalles sont des données, pas du code.
 
 - **Journal** : interventions datées avec kilométrage, pièces (nom, quantité, référence),
   coût (optionnel), garage et notes.
+- **Postes libres** : une intervention hors postes suivis (tresse de masse, appoint
+  d'huile, recherche de panne…) garde son libellé ; les postes personnalisés
+  (avec intervalles km/mois et icône) se créent depuis l'onglet Réglages.
 - **Échéances** : calcul à partir de l'intervalle en km et/ou en mois de chaque poste
   (vidange 15 000 km / 12 mois par défaut), au premier des deux atteint.
 - **États** : `ok`, `a_prevoir` (≤ 2 000 km ou ≤ 30 j), `depasse`, `inconnu`.
