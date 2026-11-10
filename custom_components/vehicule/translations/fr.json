@@ -53,6 +53,7 @@
     "maj_km": {"name": "Mettre à jour le kilométrage"},
     "exporter": {"name": "Exporter le carnet"},
     "maj_vehicule": {"name": "Modifier le véhicule"},
-    "definir_poste": {"name": "Définir un poste d'entretien"}
+    "definir_poste": {"name": "Définir un poste d'entretien"},
+    "marquer_fait": {"name": "Marquer une intervention comme faite"}
   }
 }

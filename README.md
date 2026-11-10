@@ -16,6 +16,9 @@ Assistant 2026.3+ sans passer par le dépôt *brands*.
   garage et notes.
 - **Renommage** : le libellé d'un poste s'édite dans Réglages ; le changement suit
   l'historique du journal et les noms de capteurs.
+- **Planning** : une intervention peut être « à faire » (date prévue, km cible) —
+  elle vit dans le journal mais ne compte ni dans les échéances, ni dans les coûts.
+  Le bouton « Fait » (ou le service `marquer_fait`) la réalise et relance les compteurs.
 - **Postes libres** : une intervention hors postes suivis (tresse de masse, appoint
   d'huile, recherche de panne…) garde son libellé ; les postes personnalisés
   (avec intervalles km/mois et icône) se créent depuis l'onglet Réglages.
@@ -75,7 +78,8 @@ Un seul carnet par instance.
 | `sensor.*_<poste>_etat` | `ok` / `a_prevoir` / `depasse` / `inconnu` |
 | `sensor.*_<poste>_jours_restants` | Jours restants (désactivé par défaut) |
 | `sensor.*_prochaine_echeance` | Poste le plus urgent |
-| `sensor.*_derniere_intervention` | Date et détails de la dernière intervention |
+| `sensor.*_derniere_intervention` | Date et détails de la dernière intervention réalisée |
+| `sensor.*_a_faire` | Nombre d'interventions planifiées (liste en attributs) |
 | `calendar.*_echeances_d_entretien` | Échéances datées |
 | `binary_sensor.*_integrite_du_carnet` | `on` si un fichier manque ou est illisible |
 
@@ -90,6 +94,7 @@ Un seul carnet par instance.
 | `vehicule.exporter` | Écrit un CSV ou JSON, renvoie le chemin (`return_response`) |
 | `vehicule.maj_vehicule` | Modifie l'identité du véhicule |
 | `vehicule.definir_poste` | Crée/ajuste un poste et ses intervalles |
+| `vehicule.marquer_fait` | Réalise une intervention « à faire » (`id`, `km`, `date`) |
 
 Exemple :
 

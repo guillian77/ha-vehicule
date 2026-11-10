@@ -20,6 +20,13 @@ def test_le_fichier_js_existe_et_declare_lelement():
     assert "https://" not in contenu
 
 
+def test_version_alignee_sur_le_manifest():
+    from custom_components.vehicule.const import VERSION
+
+    manifest = json.loads((DOSSIER / "manifest.json").read_text(encoding="utf-8"))
+    assert VERSION == manifest["version"], "const.VERSION doit suivre manifest.json"
+
+
 def test_manifest_declare_les_dependances_du_panneau():
     manifest = json.loads((DOSSIER / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["domain"] == DOMAIN

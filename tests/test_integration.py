@@ -372,6 +372,67 @@ async def test_renommage_poste_suit_journal_et_capteurs(entry, hass, coordinator
     assert "Vidange + filtre à huile" in capteur.attributes["friendly_name"]
 
 
+async def test_intervention_a_faire_ne_touche_pas_aux_echeances(entry, hass, coordinator):
+    """Un « à faire » vit dans le journal mais ne relance pas les compteurs."""
+    km_avant = coordinator.km_actuel
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {
+            "type": "vidange",
+            "statut": "a_faire",
+            "date": "2026-12-01",
+            "km": 135000,
+            "nom": None,
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    prevue = coordinator.interventions[-1]
+    assert prevue["statut"] == "a_faire"
+    assert prevue["prochain"] is None
+    assert coordinator.km_actuel == km_avant
+    assert [item["id"] for item in coordinator.data["a_faire"]] == [prevue["id"]]
+    # Pas d'échéance recalculée depuis une simple intention.
+    echeance = coordinator.echeance("vidange")
+    assert echeance["derniere"] is None
+    assert coordinator.data["stats"]["total"] == 0
+
+    capteur = _entites(hass, "_a_faire")[0]
+    assert capteur is not None
+    assert capteur.state == "1"
+    assert "Vidange moteur" in capteur.attributes["interventions"]
+
+
+async def test_marquer_fait_recalcule_lecheance(entry, hass, coordinator):
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {"type": "vidange", "statut": "a_faire", "date": "2026-12-01", "km": 135000},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    identifiant = coordinator.interventions[-1]["id"]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "marquer_fait",
+        {"id": identifiant, "km": 130100, "date": "2026-11-20"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    realisee = next(i for i in coordinator.interventions if i["id"] == identifiant)
+    assert realisee["statut"] == "fait"
+    assert realisee["date"] == "2026-11-20"
+    assert realisee["km"] == 130100
+    assert realisee["prochain"]["km"] == 145100  # 130100 + 15000
+    assert coordinator.km_actuel == 130100
+    assert coordinator.data["a_faire"] == []
+    assert coordinator.echeance("vidange")["derniere"]["km"] == 130100
+
+
 async def test_persistance_apres_rechargement(hass, entry):
     await hass.services.async_call(
         DOMAIN,

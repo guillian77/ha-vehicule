@@ -41,6 +41,7 @@ async def async_setup_entry(
         KmActuelSensor(coordinator),
         ProchaineEcheanceSensor(coordinator),
         DerniereInterventionSensor(coordinator),
+        InterventionsAFaireSensor(coordinator),
     ]
 
     entites_existantes: set[str] = set()
@@ -277,7 +278,7 @@ class ProchaineEcheanceSensor(CarnetEntity, SensorEntity):
 
 
 class DerniereInterventionSensor(CarnetEntity, SensorEntity):
-    """Date de la dernière intervention enregistrée."""
+    """Date de la dernière intervention réalisée."""
 
     _attr_name = "Dernière intervention"
     _attr_device_class = SensorDeviceClass.DATE
@@ -288,15 +289,25 @@ class DerniereInterventionSensor(CarnetEntity, SensorEntity):
         self._attr_unique_id = f"{coordinator.entry.entry_id}_derniere_intervention"
 
     @property
+    def _realisees(self) -> list[dict]:
+        from .const import STATUT_FAIT
+
+        return [
+            item
+            for item in self.coordinator.data.get("interventions") or []
+            if str(item.get("statut") or STATUT_FAIT) == STATUT_FAIT
+        ]
+
+    @property
     def native_value(self):
-        interventions = self.coordinator.data.get("interventions") or []
+        interventions = self._realisees
         from .calcul import parse_date
 
         return parse_date(interventions[0].get("date")) if interventions else None
 
     @property
     def extra_state_attributes(self):
-        interventions = self.coordinator.data.get("interventions") or []
+        interventions = self._realisees
         if not interventions:
             return {"nombre_interventions": 0}
         derniere = interventions[0]
@@ -307,4 +318,41 @@ class DerniereInterventionSensor(CarnetEntity, SensorEntity):
             "km": derniere.get("km"),
             "notes": derniere.get("notes"),
             "total_depense": self.coordinator.data.get("stats", {}).get("total"),
+        }
+
+
+class InterventionsAFaireSensor(CarnetEntity, SensorEntity):
+    """Nombre d'interventions planifiées mais pas encore réalisées."""
+
+    _attr_name = "À faire"
+    _attr_icon = "mdi:clipboard-text-clock-outline"
+    _attr_native_unit_of_measurement = "interventions"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_a_faire"
+
+    @property
+    def _a_faire(self) -> list[dict]:
+        return self.coordinator.data.get("a_faire") or []
+
+    @property
+    def native_value(self) -> int:
+        return len(self._a_faire)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        items = self._a_faire
+        prochaines = sorted(
+            (item for item in items if item.get("date")),
+            key=lambda item: str(item.get("date")),
+        )
+        return {
+            "interventions": [item.get("nom") or item.get("type") for item in items],
+            "identifiants": [item.get("id") for item in items],
+            "prochaine_date": prochaines[0].get("date") if prochaines else None,
+            "prochaine": (prochaines[0].get("nom") or prochaines[0].get("type"))
+            if prochaines
+            else None,
         }

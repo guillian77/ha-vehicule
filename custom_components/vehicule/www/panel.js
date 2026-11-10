@@ -159,6 +159,19 @@ const STYLE = `
   .champs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   label.champ { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--secondary-text-color); }
   label.champ.wide { grid-column: 1 / -1; }
+  .champ.wide { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; }
+  .champ .etiquette { font-size: 13px; color: var(--secondary-text-color, #727272); }
+  .segments { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .segment {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+    border: 1px solid var(--divider-color, rgba(0,0,0,.16));
+    background: var(--card-background-color, #fff); color: var(--primary-text-color);
+  }
+  .segment ha-icon { --mdc-icon-size: 18px; }
+  .segment.actif {
+    background: var(--primary-color, #03a9f4); border-color: transparent; color: #fff;
+  }
   input, select, textarea {
     font: inherit; color: inherit; padding: 8px 10px; border-radius: 8px;
     border: 1px solid var(--divider-color, rgba(0,0,0,.25));
@@ -328,7 +341,7 @@ class VehiculePanel extends HTMLElement {
     this._erreur = null;
     this._narrow = false;
     this._dialogue = null; // {modele, pieces:[], intervention?}
-    this._filtres = { type: "all", annee: "all", q: "" };
+    this._filtres = { type: "all", annee: "all", statut: "all", q: "" };
     this._occupe = false;
     this._shadow.addEventListener("click", (evt) => this._onClick(evt));
     this._shadow.addEventListener("submit", (evt) => this._onSubmit(evt));
@@ -442,6 +455,7 @@ class VehiculePanel extends HTMLElement {
       edition: !!intervention,
       form: {
         id: intervention?.id || null,
+        statut: intervention?.statut || "fait",
         type: libre ? POSTE_LIBRE : base.type || "vidange",
         type_original: intervention?.type || null,
         nom_libre: libre ? intervention.nom || "" : "",
@@ -478,10 +492,12 @@ class VehiculePanel extends HTMLElement {
     let total = 0;
     let chiffre = false;
     for (const ligne of lignes) {
-      const prix = Number(ligne.querySelector('[name="piece_prix"]')?.value);
-      const qteBrute = ligne.querySelector('[name="piece_qte"]')?.value;
-      const qte = qteBrute === "" || qteBrute === null ? 1 : Number(qteBrute);
-      const valeur = Number.isFinite(prix) ? prix * (Number.isFinite(qte) ? qte : 1) : null;
+      const prixBrut = String(ligne.querySelector('[name="piece_prix"]')?.value ?? "").trim();
+      const qteBrute = String(ligne.querySelector('[name="piece_qte"]')?.value ?? "").trim();
+      const qte = qteBrute === "" ? 1 : Number(qteBrute);
+      const valeur = prixBrut === "" || !Number.isFinite(Number(prixBrut))
+        ? null
+        : Number(prixBrut) * (Number.isFinite(qte) ? qte : 1);
       if (valeur !== null) {
         total += valeur;
         chiffre = true;
@@ -549,6 +565,7 @@ class VehiculePanel extends HTMLElement {
 
     const donnees = {
       type,
+      statut: form.statut === "a_faire" ? "a_faire" : "fait",
       date: form.date || aujourdhui(),
       notes: form.notes || null,
       garage: form.garage || null,
@@ -637,7 +654,9 @@ class VehiculePanel extends HTMLElement {
       this._data;
     const alertes = echeances.filter((e) => e.etat === "depasse" || e.etat === "a_prevoir");
     const prochaine = this._data.prochaine_alerte;
-    const dernieres = interventions.slice(0, 4);
+    const aFaire = this._data.a_faire || [];
+    const realisees = interventions.filter((item) => (item.statut || "fait") === "fait");
+    const dernieres = realisees.slice(0, 4);
 
     if (!interventions.length) {
       return `
@@ -655,6 +674,22 @@ class VehiculePanel extends HTMLElement {
 
     return `
       ${this._cartouches(alertes.length)}
+      ${aFaire.length ? `
+        <div class="entete-section"><h2>À faire</h2>
+          <span class="badge inconnu">${aFaire.length}</span></div>
+        <div class="carte"><div class="liste">
+          ${aFaire.map((item) => `
+            <div class="ligne">
+              <ha-icon icon="mdi:clipboard-text-clock-outline"></ha-icon>
+              <div style="flex:1;min-width:0">
+                <div class="titre-ligne">${esc(item.nom || item.type)}</div>
+                <div class="sous">${item.date ? `prévu le ${dateFr(item.date)}` : "sans date"}${
+                  item.km != null ? ` · ${km(item.km)}` : ""
+                }${item.garage ? ` · ${esc(item.garage)}` : ""}</div>
+              </div>
+              <button class="action primaire" data-action="marquer-fait" data-id="${esc(item.id)}">Fait</button>
+            </div>`).join("")}
+        </div></div>` : ""}
       ${prochaine ? `
         <div class="carte" style="margin-top:14px;border-left:4px solid ${
           prochaine.etat === "depasse" ? "var(--error-color,#c62828)" : "var(--warning-color,#fb8c00)"
@@ -837,6 +872,8 @@ class VehiculePanel extends HTMLElement {
       .reverse();
     const q = this._filtres.q.trim().toLowerCase();
     const filtrees = interventions.filter((item) => {
+      const statut = item.statut || "fait";
+      if (this._filtres.statut !== "all" && statut !== this._filtres.statut) return false;
       if (this._filtres.type !== "all" && item.type !== this._filtres.type) return false;
       if (this._filtres.annee !== "all" && String(item.date || "").slice(0, 4) !== this._filtres.annee) return false;
       if (!q) return true;
@@ -858,6 +895,11 @@ class VehiculePanel extends HTMLElement {
             const libelle = interventions.find((item) => item.type === type)?.nom || type;
             return `<option value="${esc(type)}" ${this._filtres.type === type ? "selected" : ""}>${esc(libelle)}</option>`;
           }).join("")}
+        </select>
+        <select name="filtre-statut" data-filtre="statut">
+          <option value="all">Tous les statuts</option>
+          <option value="a_faire" ${this._filtres.statut === "a_faire" ? "selected" : ""}>À faire</option>
+          <option value="fait" ${this._filtres.statut === "fait" ? "selected" : ""}>Réalisées</option>
         </select>
         <select name="filtre-annee" data-filtre="annee">
           <option value="all">Toutes les années</option>
@@ -885,7 +927,11 @@ class VehiculePanel extends HTMLElement {
       <div class="ligne">
         <ha-icon icon="${esc(icone)}"></ha-icon>
         <div style="flex:1;min-width:0">
-          <div class="titre-ligne">${esc(item.nom || item.type)}</div>
+          <div class="titre-ligne">${esc(item.nom || item.type)}${
+            (item.statut || "fait") === "a_faire"
+              ? ` <span class="badge inconnu" style="margin-left:6px">À faire</span>`
+              : ""
+          }</div>
           <div class="sous">
             ${dateFr(item.date)}${item.km != null ? ` · ${km(item.km)}` : ""}${
               item.garage ? ` · ${esc(item.garage)}` : ""
@@ -897,6 +943,9 @@ class VehiculePanel extends HTMLElement {
         <div class="droite">
           ${item.cout != null ? euros(item.cout) : `<span class="petit muted">—</span>`}
         </div>
+        ${(item.statut || "fait") === "a_faire"
+          ? `<button class="action primaire" data-action="marquer-fait" data-id="${esc(item.id)}">Fait</button>`
+          : ""}
         <button class="icone" title="Modifier" data-action="editer" data-id="${esc(item.id)}">
           <ha-icon icon="mdi:pencil"></ha-icon></button>
         <button class="icone" title="Supprimer" data-action="supprimer" data-id="${esc(item.id)}" data-nom="${esc(item.nom || item.type)}">
@@ -1138,9 +1187,22 @@ class VehiculePanel extends HTMLElement {
         <form class="boite" id="form-intervention">
           <h2>${edition ? "Modifier l'intervention" : "Nouvelle intervention"}</h2>
           <p class="petit muted" style="margin-top:0">
-            La prochaine échéance est calculée depuis l'intervalle du poste.
+            ${form.statut === "a_faire"
+              ? "Intervention planifiée : elle n'ouvre pas de nouvelle échéance tant qu'elle n'est pas marquée comme faite."
+              : "La prochaine échéance est calculée depuis l'intervalle du poste."}
           </p>
           <div class="champs">
+            <div class="champ wide">
+              <span class="etiquette">Statut</span>
+              <div class="segments">
+                <button type="button" class="segment ${form.statut === "a_faire" ? "" : "actif"}"
+                  data-action="statut" data-statut="fait">
+                  <ha-icon icon="mdi:check-circle-outline"></ha-icon> Réalisée</button>
+                <button type="button" class="segment ${form.statut === "a_faire" ? "actif" : ""}"
+                  data-action="statut" data-statut="a_faire">
+                  <ha-icon icon="mdi:clipboard-text-clock-outline"></ha-icon> À faire</button>
+              </div>
+            </div>
             <label class="champ">Poste
               <select name="type">
                 ${postes.map((p) => `<option value="${esc(p.id)}" ${form.type === p.id ? "selected" : ""}>${esc(p.nom)}</option>`).join("")}
@@ -1159,8 +1221,10 @@ class VehiculePanel extends HTMLElement {
                 .map((item) => item.nom)
                 .filter(Boolean))].map((libelle) => `<option value="${esc(libelle)}"></option>`).join("")}
             </datalist>
-            <label class="champ">Date<input name="date" type="date" value="${esc(form.date || aujourdhui())}"></label>
-            <label class="champ">Kilométrage<input name="km" type="number" min="0" value="${esc(form.km ?? "")}"></label>
+            <label class="champ">${form.statut === "a_faire" ? "Date prévue" : "Date"}
+              <input name="date" type="date" value="${esc(form.date || aujourdhui())}"></label>
+            <label class="champ">${form.statut === "a_faire" ? "Km cible" : "Kilométrage"}
+              <input name="km" type="number" min="0" value="${esc(form.km ?? "")}"></label>
             <label class="champ">Coût total (optionnel)
               <input name="cout" type="number" min="0" step="0.01" value="${esc(form.cout ?? "")}">
               <span class="petit muted total-pieces"></span>
@@ -1188,7 +1252,7 @@ class VehiculePanel extends HTMLElement {
             <button class="action" type="button" data-action="ajouter-piece">+ Ajouter une pièce</button>
           </div>
 
-          <details style="margin-top:16px">
+          ${form.statut === "a_faire" ? "" : `<details style="margin-top:16px">
             <summary class="petit muted" style="cursor:pointer">Forcer l'échéance suivante (optionnel)</summary>
             <p class="petit muted" style="margin:8px 0 0">
               Laisse vide pour laisser calculer à partir de l'intervalle du poste${
@@ -1203,7 +1267,7 @@ class VehiculePanel extends HTMLElement {
               <label class="champ">Prochain km<input name="prochain_km" type="number" min="0" value="${esc(form.prochain_km ?? "")}"></label>
               <label class="champ">Prochaine date<input name="prochain_date" type="date" value="${esc(form.prochain_date || "")}"></label>
             </div>
-          </details>
+          </details>`}
 
           <div class="pied">
             <button class="action" type="button" data-action="fermer">Annuler</button>
@@ -1268,6 +1332,15 @@ class VehiculePanel extends HTMLElement {
         break;
       case "sauver-poste":
         this._sauverPoste(cible.dataset.poste);
+        break;
+      case "statut":
+        this._lireFormulaire();
+        this._dialogue.form.statut = cible.dataset.statut === "a_faire" ? "a_faire" : "fait";
+        this._render();
+        this._majTotalPieces();
+        break;
+      case "marquer-fait":
+        this._marquerFait(cible.dataset.id);
         break;
       case "exporter":
         this._exporter(cible.dataset.format);
@@ -1402,6 +1475,11 @@ class VehiculePanel extends HTMLElement {
     }
     const ok = await this._appelerService("supprimer_intervention", { id });
     if (ok !== null) this._toast("Intervention supprimée");
+  }
+
+  async _marquerFait(id) {
+    const ok = await this._appelerService("marquer_fait", { id });
+    if (ok !== null) this._toast("Intervention marquée comme faite");
   }
 
   async _sauverPoste(posteId) {

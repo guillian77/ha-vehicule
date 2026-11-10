@@ -18,9 +18,21 @@ enregistrer_intervention:
         (tresse de masse, appoint d'huile, recherche de panne…).
       selector:
         text:
+    statut:
+      name: Statut
+      description: >-
+        fait (défaut) pour une intervention réalisée, a_faire pour une
+        intervention planifiée (pas d'échéance tant qu'elle n'est pas réalisée).
+      selector:
+        select:
+          options:
+            - fait
+            - a_faire
     date:
       name: Date
-      description: Date de l'intervention (AAAA-MM-JJ). Par défaut aujourd'hui.
+      description: >-
+        Date de l'intervention, ou date prévue pour une intervention à faire
+        (AAAA-MM-JJ). Par défaut aujourd'hui.
       selector:
         date:
     km:
@@ -190,3 +202,28 @@ definir_poste:
       name: Suivi actif
       selector:
         boolean:
+
+marquer_fait:
+  name: Marquer une intervention comme faite
+  description: >-
+    Passe une intervention « à faire » en réalisation : date du jour et
+    kilométrage courant par défaut, puis recalcul de l'échéance du poste.
+  fields:
+    id:
+      name: Identifiant
+      required: true
+      selector:
+        text:
+    km:
+      name: Kilométrage
+      description: Kilométrage de la réalisation (par défaut le km courant).
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          unit_of_measurement: km
+          mode: box
+    date:
+      name: Date
+      selector:
+        date:

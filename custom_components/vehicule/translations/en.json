@@ -53,6 +53,7 @@
     "maj_km": {"name": "Update mileage"},
     "exporter": {"name": "Export the log"},
     "maj_vehicule": {"name": "Update the vehicle"},
-    "definir_poste": {"name": "Define a maintenance item"}
+    "definir_poste": {"name": "Define a maintenance item"},
+    "marquer_fait": {"name": "Mark a maintenance job as done"}
   }
 }

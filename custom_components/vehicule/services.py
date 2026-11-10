@@ -33,6 +33,7 @@ from .const import (
     ATTR_POSTE,
     ATTR_PROCHAIN_DATE,
     ATTR_PROCHAIN_KM,
+    ATTR_STATUT,
     ATTR_TYPE,
     ATTR_VIN,
     DOMAIN,
@@ -41,8 +42,10 @@ from .const import (
     SERVICE_EXPORTER,
     SERVICE_MAJ_KM,
     SERVICE_MAJ_VEHICULE,
+    SERVICE_MARQUER_FAIT,
     SERVICE_MODIFIER,
     SERVICE_SUPPRIMER,
+    STATUTS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,7 +62,8 @@ SCHEMA_PIECE = vol.Schema(
 SCHEMA_ENREGISTRER = vol.Schema(
     {
         vol.Required(ATTR_TYPE): vol.Coerce(str),
-        vol.Optional(ATTR_NOM): vol.Coerce(str),
+        vol.Optional(ATTR_NOM): vol.Any(None, vol.Coerce(str)),
+        vol.Optional(ATTR_STATUT): vol.In(STATUTS),
         vol.Optional(ATTR_DATE): vol.Coerce(str),
         vol.Optional(ATTR_KM): vol.Any(None, vol.Coerce(int)),
         vol.Optional(ATTR_PIECES): vol.Any(None, [vol.Any(SCHEMA_PIECE, vol.Coerce(str))]),
@@ -75,7 +79,8 @@ SCHEMA_MODIFIER = vol.Schema(
     {
         vol.Required(ATTR_ID): vol.Coerce(str),
         vol.Optional(ATTR_TYPE): vol.Coerce(str),
-        vol.Optional(ATTR_NOM): vol.Coerce(str),
+        vol.Optional(ATTR_NOM): vol.Any(None, vol.Coerce(str)),
+        vol.Optional(ATTR_STATUT): vol.In(STATUTS),
         vol.Optional(ATTR_DATE): vol.Coerce(str),
         vol.Optional(ATTR_KM): vol.Any(None, vol.Coerce(int)),
         vol.Optional(ATTR_PIECES): vol.Any(
@@ -90,6 +95,14 @@ SCHEMA_MODIFIER = vol.Schema(
 )
 
 SCHEMA_SUPPRIMER = vol.Schema({vol.Required(ATTR_ID): vol.Coerce(str)})
+
+SCHEMA_MARQUER_FAIT = vol.Schema(
+    {
+        vol.Required(ATTR_ID): vol.Coerce(str),
+        vol.Optional(ATTR_KM): vol.Any(None, vol.Coerce(int)),
+        vol.Optional(ATTR_DATE): vol.Coerce(str),
+    }
+)
 
 SCHEMA_MAJ_KM = vol.Schema(
     {
@@ -136,6 +149,7 @@ SERVICES: dict[str, Any] = {
     SERVICE_EXPORTER: SCHEMA_EXPORTER,
     SERVICE_MAJ_VEHICULE: SCHEMA_MAJ_VEHICULE,
     SERVICE_DEFINIR_POSTE: SCHEMA_DEFINIR_POSTE,
+    SERVICE_MARQUER_FAIT: SCHEMA_MARQUER_FAIT,
 }
 
 
@@ -168,6 +182,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         identifiant = data.pop(ATTR_ID)
         try:
             await coordinator.async_modifier(identifiant, data)
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
+    async def _marquer_fait(call: ServiceCall) -> None:
+        coordinator = get_coordinator(hass)
+        try:
+            await coordinator.async_marquer_fait(
+                call.data[ATTR_ID],
+                call.data.get(ATTR_KM),
+                call.data.get(ATTR_DATE),
+            )
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
 
@@ -225,6 +250,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_DEFINIR_POSTE, _definir_poste, schema=SCHEMA_DEFINIR_POSTE
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MARQUER_FAIT, _marquer_fait, schema=SCHEMA_MARQUER_FAIT
     )
 
 

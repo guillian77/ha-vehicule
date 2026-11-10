@@ -27,6 +27,9 @@ from .const import (
     DOMAIN,
     EVENT_INTERVENTION,
     EVENT_KM,
+    STATUT_A_FAIRE,
+    STATUT_FAIT,
+    STATUTS,
     VERSION,
 )
 from .storage import CarnetStorage
@@ -77,7 +80,9 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def snapshot(self) -> dict[str, Any]:
         """État complet exposé aux entités, au panneau et aux services."""
         jour = self.today
-        liste = echeances(self.postes, self.interventions, self.km_actuel, jour)
+        realisees = [item for item in self.interventions if self._est_faite(item)]
+        liste = echeances(self.postes, realisees, self.km_actuel, jour)
+        a_faire = [item for item in self.interventions if not self._est_faite(item)]
         return {
             "version": VERSION,
             "vehicule": dict(self.vehicule),
@@ -85,9 +90,18 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "interventions": fusionner_parcours(self.interventions),
             "echeances": liste,
             "prochaine_alerte": prochaine_alerte(liste),
-            "stats": statistiques(self.interventions, self.km_actuel),
+            "stats": statistiques(realisees, self.km_actuel),
+            "a_faire": sorted(
+                (dict(item) for item in a_faire),
+                key=lambda item: (item.get("date") or "", item.get("nom") or ""),
+            ),
             "today": jour.isoformat(),
         }
+
+    @staticmethod
+    def _est_faite(intervention: dict) -> bool:
+        """Une intervention sans statut vient d'une version antérieure : réalisée."""
+        return str(intervention.get("statut") or STATUT_FAIT) == STATUT_FAIT
 
     def echeance(self, poste_id: str) -> dict[str, Any] | None:
         for item in self.data.get("echeances", []):
@@ -177,12 +191,21 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         poste = poste_by_id(self.postes, poste_id)
         nom = str(data.get("nom") or "").strip() or (poste or {}).get("nom") or poste_id
-        prochain = compute_prochain(
-            poste,
-            jour,
-            km,
-            prochain_km=data.get("prochain_km"),
-            prochain_date=data.get("prochain_date"),
+        statut = str(data.get("statut") or STATUT_FAIT)
+        if statut not in STATUTS:
+            raise ValueError("Statut inconnu (fait ou a_faire)")
+        # Une intervention à faire n'ouvre pas de nouvelle échéance : le compteur
+        # ne repart qu'une fois le travail réellement réalisé.
+        prochain = (
+            compute_prochain(
+                poste,
+                jour,
+                km,
+                prochain_km=data.get("prochain_km"),
+                prochain_date=data.get("prochain_date"),
+            )
+            if statut == STATUT_FAIT
+            else None
         )
 
         pieces = self._normaliser_pieces(data.get("pieces"))
@@ -202,12 +225,16 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "garage": str(data.get("garage") or "").strip() or None,
             "notes": str(data.get("notes") or "").strip() or None,
             "prochain": prochain,
+            "statut": statut,
             "cree": dt_util.utcnow().isoformat(),
         }
         self.interventions.append(intervention)
 
-        # Le kilométrage connu suit l'intervention la plus haute.
-        if km is not None and (self.km_actuel is None or km > self.km_actuel):
+        # Le kilométrage connu suit l'intervention la plus haute, mais seulement
+        # pour un travail réalisé (un « à faire » n'a qu'un km cible).
+        if statut == STATUT_FAIT and km is not None and (
+            self.km_actuel is None or km > self.km_actuel
+        ):
             self.vehicule["km_actuel"] = km
             self.vehicule["km_maj"] = jour.isoformat()
 
@@ -244,9 +271,16 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cible["nom"] = poste_label(self.postes, cible["type"])
         if data.get("nom"):
             cible["nom"] = str(data["nom"]).strip()
+        if "statut" in data:
+            statut = str(data.get("statut") or "")
+            if statut not in STATUTS:
+                raise ValueError("Statut inconnu (fait ou a_faire)")
+            cible["statut"] = statut
 
         # Recalcul de l'échéance, sauf si l'utilisateur la fixe explicitement.
-        if data.get("prochain_km") is not None or data.get("prochain_date"):
+        if not self._est_faite(cible):
+            cible["prochain"] = None
+        elif data.get("prochain_km") is not None or data.get("prochain_date"):
             cible["prochain"] = compute_prochain(
                 poste_by_id(self.postes, cible["type"]),
                 parse_date(cible.get("date")),
@@ -254,18 +288,80 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 prochain_km=data.get("prochain_km"),
                 prochain_date=data.get("prochain_date"),
             )
-        elif any(champ in data for champ in ("type", "date", "km")):
+        elif any(champ in data for champ in ("type", "date", "km", "statut")):
             cible["prochain"] = compute_prochain(
                 poste_by_id(self.postes, cible["type"]),
                 parse_date(cible.get("date")),
                 cible.get("km"),
             )
+
+        # Le kilométrage connu suit une réalisation nouvellement datée.
+        self._suivre_km(cible)
         cible["modifie"] = dt_util.utcnow().isoformat()
 
         await self._async_commit()
         self.hass.bus.async_fire(
             EVENT_INTERVENTION,
             {"action": "modification", "intervention": cible, "vehicule": dict(self.vehicule)},
+        )
+        return cible
+
+    def _suivre_km(self, intervention: dict) -> None:
+        """Aligne le kilométrage courant sur une intervention réalisée."""
+        if not self._est_faite(intervention):
+            return
+        km = intervention.get("km")
+        if km is None:
+            return
+        try:
+            km = int(km)
+        except (TypeError, ValueError):
+            return
+        if self.km_actuel is None or km > self.km_actuel:
+            self.vehicule["km_actuel"] = km
+            self.vehicule["km_maj"] = intervention.get("date")
+
+    async def async_marquer_fait(
+        self,
+        intervention_id: str,
+        km: int | None = None,
+        jour: str | None = None,
+    ) -> dict[str, Any]:
+        """Transforme un « à faire » en réalisation (date du jour par défaut)."""
+        cible = next(
+            (item for item in self.interventions if item.get("id") == intervention_id),
+            None,
+        )
+        if cible is None:
+            raise ValueError(f"Intervention inconnue : {intervention_id}")
+
+        if self._est_faite(cible):
+            return cible
+
+        date_jour = parse_date(jour) or self.today
+        kilometrage = km
+        if kilometrage in (None, ""):
+            kilometrage = self.km_actuel if self.km_actuel is not None else cible.get("km")
+
+        cible["statut"] = STATUT_FAIT
+        cible["date"] = date_jour.isoformat()
+        cible["km"] = int(kilometrage) if kilometrage not in (None, "") else None
+        cible["prochain"] = compute_prochain(
+            poste_by_id(self.postes, cible["type"]),
+            date_jour,
+            cible["km"],
+        )
+        cible["modifie"] = dt_util.utcnow().isoformat()
+        self._suivre_km(cible)
+
+        await self._async_commit()
+        self.hass.bus.async_fire(
+            EVENT_INTERVENTION,
+            {
+                "action": "realisation",
+                "intervention": cible,
+                "vehicule": dict(self.vehicule),
+            },
         )
         return cible
 
@@ -414,6 +510,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "notes",
                 "prochain km",
                 "prochaine date",
+                "statut",
             ]
         )
         for item in fusionner_parcours(self.interventions):
@@ -436,6 +533,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     item.get("notes") or "",
                     prochain.get("km", ""),
                     prochain.get("date", ""),
+                    "à faire" if not self._est_faite(item) else "réalisée",
                 ]
             )
         return buffer.getvalue()

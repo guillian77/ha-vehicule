@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.const import Platform
 
 DOMAIN = "vehicule"
-VERSION = "0.1.0"
+VERSION = "0.4.0"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -153,6 +153,7 @@ SERVICE_MAJ_KM = "maj_km"
 SERVICE_EXPORTER = "exporter"
 SERVICE_MAJ_VEHICULE = "maj_vehicule"
 SERVICE_DEFINIR_POSTE = "definir_poste"
+SERVICE_MARQUER_FAIT = "marquer_fait"
 
 ATTR_POSTE = "poste"
 ATTR_NOM = "nom"
@@ -176,8 +177,16 @@ ATTR_GARAGE = "garage"
 ATTR_NOTES = "notes"
 ATTR_PROCHAIN_KM = "prochain_km"
 ATTR_PROCHAIN_DATE = "prochain_date"
+ATTR_STATUT = "statut"
 ATTR_FORMAT = "format"
 ATTR_NOM_FICHIER = "nom_fichier"
+
+# --- Statut d'une intervention -------------------------------------------
+# Une intervention « à faire » est une intention : elle vit dans le journal
+# mais ne compte ni dans les échéances, ni dans les coûts, ni dans les pièces.
+STATUT_FAIT = "fait"
+STATUT_A_FAIRE = "a_faire"
+STATUTS = (STATUT_FAIT, STATUT_A_FAIRE)
 
 EVENT_INTERVENTION = f"{DOMAIN}_intervention"
 EVENT_KM = f"{DOMAIN}_km"
