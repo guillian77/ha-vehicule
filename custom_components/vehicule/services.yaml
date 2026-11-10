@@ -1,0 +1,185 @@
+# Description des services du carnet véhicule.
+enregistrer_intervention:
+  name: Enregistrer une intervention
+  description: >-
+    Ajoute une intervention au journal et calcule automatiquement la prochaine
+    échéance du poste (intervalle km et/ou durée définis dans le profil).
+  fields:
+    type:
+      name: Poste
+      description: Identifiant du poste d'entretien (vidange, plaquettes_avant…).
+      required: true
+      selector:
+        text:
+    date:
+      name: Date
+      description: Date de l'intervention (AAAA-MM-JJ). Par défaut aujourd'hui.
+      selector:
+        date:
+    km:
+      name: Kilométrage
+      description: Kilométrage relevé. Par défaut le kilométrage courant.
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          unit_of_measurement: km
+          mode: box
+    pieces:
+      name: Pièces
+      description: Liste de pièces utilisées (nom, quantité, référence).
+      selector:
+        object:
+    cout:
+      name: Coût
+      description: Coût total en euros (optionnel).
+      selector:
+        number:
+          min: 0
+          max: 100000
+          step: 0.01
+          unit_of_measurement: €
+          mode: box
+    garage:
+      name: Garage
+      selector:
+        text:
+    notes:
+      name: Notes
+      selector:
+        text:
+          multiline: true
+    prochain_km:
+      name: Prochaine échéance (km)
+      description: Force l'échéance kilométrique au lieu de l'intervalle standard.
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          unit_of_measurement: km
+    prochain_date:
+      name: Prochaine échéance (date)
+      selector:
+        date:
+
+modifier_intervention:
+  name: Modifier une intervention
+  description: Corrige une intervention existante (identifiée par son id).
+  fields:
+    id:
+      name: Identifiant
+      required: true
+      selector:
+        text:
+
+supprimer_intervention:
+  name: Supprimer une intervention
+  fields:
+    id:
+      name: Identifiant
+      required: true
+      selector:
+        text:
+
+maj_km:
+  name: Mettre à jour le kilométrage
+  description: Met à jour le kilométrage courant du véhicule.
+  fields:
+    km:
+      name: Kilométrage
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          unit_of_measurement: km
+          mode: box
+    date:
+      name: Date du relevé
+      selector:
+        date:
+
+exporter:
+  name: Exporter le carnet
+  description: >-
+    Écrit un export CSV ou JSON dans /config/vehicule/exports et renvoie le
+    chemin du fichier.
+  fields:
+    format:
+      name: Format
+      selector:
+        select:
+          options:
+            - csv
+            - json
+    nom_fichier:
+      name: Nom du fichier
+      selector:
+        text:
+
+maj_vehicule:
+  name: Modifier le véhicule
+  fields:
+    nom:
+      name: Nom
+      selector:
+        text:
+    marque:
+      name: Marque
+      selector:
+        text:
+    modele:
+      name: Modèle
+      selector:
+        text:
+    annee:
+      name: Année
+      selector:
+        number:
+          min: 1900
+          max: 2100
+          mode: box
+    vin:
+      name: VIN
+      selector:
+        text:
+    moteur:
+      name: Moteur
+      selector:
+        text:
+    immatriculation:
+      name: Immatriculation
+      selector:
+        text:
+
+definir_poste:
+  name: Définir un poste d'entretien
+  description: Crée ou met à jour un poste et ses intervalles.
+  fields:
+    poste:
+      name: Identifiant du poste
+      required: true
+      selector:
+        text:
+    nom:
+      name: Libellé
+      selector:
+        text:
+    km:
+      name: Intervalle (km)
+      selector:
+        number:
+          min: 0
+          max: 300000
+          unit_of_measurement: km
+    mois:
+      name: Intervalle (mois)
+      selector:
+        number:
+          min: 0
+          max: 240
+          unit_of_measurement: mois
+    actif:
+      name: Suivi actif
+      selector:
+        boolean:

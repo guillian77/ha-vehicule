@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Carnet d'entretien du véhicule",
+        "description": "Renseigne l'identité du véhicule. Les postes d'entretien (vidange 15 000 km / 12 mois, filtres, bougies…) sont créés automatiquement et restent modifiables dans le panneau Véhicule.",
+        "data": {
+          "nom": "Nom affiché",
+          "marque": "Marque",
+          "modele": "Modèle",
+          "annee": "Année",
+          "vin": "VIN (7 derniers caractères suffisent)",
+          "moteur": "Moteur",
+          "immatriculation": "Immatriculation",
+          "km_actuel": "Kilométrage actuel"
+        },
+        "data_description": {
+          "nom": "Sert de nom d'appareil dans Home Assistant.",
+          "vin": "Utilisé comme numéro de série de l'appareil.",
+          "km_actuel": "Point de départ des échéances kilométriques. Modifiable à tout moment."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Un carnet véhicule est déjà configuré.",
+      "single_instance_allowed": "Un seul carnet véhicule est supporté."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Identité du véhicule",
+        "description": "Ces informations remplacent celles saisies à l'installation. Le kilométrage se met à jour via le service maj_km ou le panneau."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "etat_poste": {
+        "state": {
+          "ok": "OK",
+          "a_prevoir": "À prévoir",
+          "depasse": "Dépassé",
+          "inconnu": "Inconnu"
+        }
+      }
+    }
+  },
+  "services": {
+    "enregistrer_intervention": {"name": "Enregistrer une intervention"},
+    "modifier_intervention": {"name": "Modifier une intervention"},
+    "supprimer_intervention": {"name": "Supprimer une intervention"},
+    "maj_km": {"name": "Mettre à jour le kilométrage"},
+    "exporter": {"name": "Exporter le carnet"},
+    "maj_vehicule": {"name": "Modifier le véhicule"},
+    "definir_poste": {"name": "Définir un poste d'entretien"}
+  }
+}

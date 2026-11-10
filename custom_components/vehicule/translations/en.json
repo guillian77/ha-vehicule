@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Vehicle maintenance log",
+        "description": "Enter the vehicle identity. Maintenance items (oil 15 000 km / 12 months, filters, spark plugs…) are created automatically and can be edited in the Vehicle panel.",
+        "data": {
+          "nom": "Display name",
+          "marque": "Make",
+          "modele": "Model",
+          "annee": "Year",
+          "vin": "VIN (last 7 characters are enough)",
+          "moteur": "Engine",
+          "immatriculation": "Plate",
+          "km_actuel": "Current mileage"
+        },
+        "data_description": {
+          "nom": "Used as the device name in Home Assistant.",
+          "vin": "Used as the device serial number.",
+          "km_actuel": "Starting point for mileage-based due dates. Can be changed anytime."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "A vehicle log is already configured.",
+      "single_instance_allowed": "Only one vehicle log is supported."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Vehicle identity",
+        "description": "These values replace the ones entered at setup. Mileage is updated through the maj_km service or the panel."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "etat_poste": {
+        "state": {
+          "ok": "OK",
+          "a_prevoir": "Due soon",
+          "depasse": "Overdue",
+          "inconnu": "Unknown"
+        }
+      }
+    }
+  },
+  "services": {
+    "enregistrer_intervention": {"name": "Record a maintenance job"},
+    "modifier_intervention": {"name": "Edit a maintenance job"},
+    "supprimer_intervention": {"name": "Delete a maintenance job"},
+    "maj_km": {"name": "Update mileage"},
+    "exporter": {"name": "Export the log"},
+    "maj_vehicule": {"name": "Update the vehicle"},
+    "definir_poste": {"name": "Define a maintenance item"}
+  }
+}
