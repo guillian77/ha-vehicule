@@ -114,16 +114,48 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         resultat = []
         for item in pieces:
             if isinstance(item, str):
-                resultat.append({"nom": item, "qte": None, "ref": None})
+                resultat.append({"nom": item, "qte": None, "ref": None, "prix": None})
             elif isinstance(item, dict):
                 resultat.append(
                     {
                         "nom": str(item.get("nom", "")).strip(),
                         "qte": item.get("qte"),
                         "ref": item.get("ref"),
+                        "prix": self._normaliser_prix(item.get("prix")),
                     }
                 )
         return [item for item in resultat if item["nom"]]
+
+    @staticmethod
+    def _normaliser_prix(prix: Any) -> float | None:
+        """Prix unitaire d'une pièce, arrondi au centime."""
+        if prix in (None, "", "None"):
+            return None
+        try:
+            valeur = float(prix)
+        except (TypeError, ValueError):
+            return None
+        return round(valeur, 2) if valeur >= 0 else None
+
+    @classmethod
+    def _total_pieces(cls, pieces: list[dict]) -> float | None:
+        """Somme des prix unitaires × quantités des pièces chiffrées."""
+        total = 0.0
+        trouve = False
+        for piece in pieces:
+            prix = piece.get("prix")
+            if prix is None:
+                continue
+            qte = piece.get("qte")
+            quantite = 1.0
+            if qte not in (None, ""):
+                try:
+                    quantite = float(qte)
+                except (TypeError, ValueError):
+                    quantite = 1.0
+            total += float(prix) * quantite
+            trouve = True
+        return round(total, 2) if trouve else None
 
     def _normaliser_cout(self, cout: Any) -> float | None:
         if cout in (None, "", "None"):
@@ -153,14 +185,20 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             prochain_date=data.get("prochain_date"),
         )
 
+        pieces = self._normaliser_pieces(data.get("pieces"))
+        cout = self._normaliser_cout(data.get("cout"))
+        if cout is None:
+            # Pas de coût global saisi : on retombe sur la somme des pièces.
+            cout = self._total_pieces(pieces)
+
         intervention = {
             "id": self._new_id(jour.isoformat(), poste_id),
             "date": jour.isoformat(),
             "km": km,
             "type": poste_id,
             "nom": nom,
-            "pieces": self._normaliser_pieces(data.get("pieces")),
-            "cout": self._normaliser_cout(data.get("cout")),
+            "pieces": pieces,
+            "cout": cout,
             "garage": str(data.get("garage") or "").strip() or None,
             "notes": str(data.get("notes") or "").strip() or None,
             "prochain": prochain,
@@ -195,6 +233,8 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cible["cout"] = self._normaliser_cout(data.get("cout"))
         if "pieces" in data:
             cible["pieces"] = self._normaliser_pieces(data.get("pieces"))
+            if "cout" not in data:
+                cible["cout"] = self._total_pieces(cible["pieces"])
         if data.get("date"):
             cible["date"] = (parse_date(data["date"]) or self.today).isoformat()
         if "km" in data:
@@ -288,6 +328,11 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.postes.append(poste)
         if "nom" in data and data["nom"]:
             poste["nom"] = str(data["nom"])
+            # Un renommage suit aussi l'historique : sinon le journal garde
+            # l'ancien libellé pour toutes les interventions déjà saisies.
+            for intervention in self.interventions:
+                if intervention.get("type") == poste_id:
+                    intervention["nom"] = poste["nom"]
         for cle in ("km", "mois"):
             if cle in data:
                 valeur = data.get(cle)
@@ -363,6 +408,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "type",
                 "poste",
                 "pièces",
+                "coût pièces (€)",
                 "coût (€)",
                 "garage",
                 "notes",
@@ -375,6 +421,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _format_piece(piece) for piece in item.get("pieces") or []
             )
             prochain = item.get("prochain") or {}
+            total_pieces = self._total_pieces(item.get("pieces") or [])
             writer.writerow(
                 [
                     item.get("id", ""),
@@ -383,6 +430,7 @@ class CarnetCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     item.get("type", ""),
                     item.get("nom", ""),
                     pieces,
+                    "" if total_pieces is None else f"{total_pieces:.2f}",
                     "" if item.get("cout") in (None, "") else f"{item['cout']:.2f}",
                     item.get("garage") or "",
                     item.get("notes") or "",
@@ -412,11 +460,14 @@ def _format_piece(piece: dict) -> str:
     nom = piece.get("nom", "")
     qte = piece.get("qte")
     ref = piece.get("ref")
+    prix = piece.get("prix")
     texte = nom
     if qte not in (None, ""):
         texte = f"{nom} x{qte}"
     if ref:
         texte = f"{texte} ({ref})"
+    if prix is not None:
+        texte = f"{texte} {prix:.2f} €/u"
     return texte
 
 

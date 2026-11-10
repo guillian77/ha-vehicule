@@ -88,6 +88,8 @@ def _entites_poste(coordinator, poste_id: str) -> list[SensorEntity]:
 class _PosteEntity(CarnetEntity):
     """Base commune aux capteurs d'un poste d'entretien."""
 
+    _suffixe = ""
+
     def __init__(self, coordinator, poste_id: str) -> None:
         super().__init__(coordinator)
         self.poste_id = poste_id
@@ -100,6 +102,11 @@ class _PosteEntity(CarnetEntity):
     @property
     def nom_poste(self) -> str:
         return self.echeance.get("nom") or self.poste_id
+
+    @property
+    def name(self) -> str:
+        """Suit le libellé du poste, y compris après un renommage."""
+        return f"{self.nom_poste} {self._suffixe}".strip()
 
     def _attributs_communs(self) -> dict:
         data = self.echeance
@@ -167,9 +174,10 @@ class KmRestantsSensor(_PosteEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 0
 
+    _suffixe = "km restants"
+
     def __init__(self, coordinator, poste_id: str) -> None:
         super().__init__(coordinator, poste_id)
-        self._attr_name = f"{self.nom_poste} km restants"
 
     @property
     def native_value(self):
@@ -191,10 +199,10 @@ class JoursRestantsSensor(_PosteEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfTime.DAYS
     _attr_device_class = SensorDeviceClass.DURATION
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _suffixe = "jours restants"
 
     def __init__(self, coordinator, poste_id: str) -> None:
         super().__init__(coordinator, poste_id)
-        self._attr_name = f"{self.nom_poste} jours restants"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{poste_id}_jours"
 
     @property
@@ -216,10 +224,10 @@ class EtatPosteSensor(_PosteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [ETA_OK, ETA_PREVOIR, ETA_DEPASSE, ETA_INCONNU]
     _attr_translation_key = "etat_poste"
+    _suffixe = "état"
 
     def __init__(self, coordinator, poste_id: str) -> None:
         super().__init__(coordinator, poste_id)
-        self._attr_name = f"{self.nom_poste} état"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{poste_id}_etat"
 
     @property

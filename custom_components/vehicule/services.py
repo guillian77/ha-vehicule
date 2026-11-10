@@ -52,6 +52,7 @@ SCHEMA_PIECE = vol.Schema(
         vol.Required("nom"): vol.Coerce(str),
         vol.Optional("qte"): vol.Any(None, vol.Coerce(float)),
         vol.Optional("ref"): vol.Any(None, vol.Coerce(str)),
+        vol.Optional("prix"): vol.Any(None, vol.Coerce(float)),
     }
 )
 

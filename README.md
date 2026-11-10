@@ -11,8 +11,11 @@ Assistant 2026.3+ sans passer par le dépôt *brands*.
 
 ## Fonctionnalités
 
-- **Journal** : interventions datées avec kilométrage, pièces (nom, quantité, référence),
-  coût (optionnel), garage et notes.
+- **Journal** : interventions datées avec kilométrage, pièces (nom, quantité, référence,
+  prix unitaire), coût (optionnel — la somme des pièces sert de valeur par défaut),
+  garage et notes.
+- **Renommage** : le libellé d'un poste s'édite dans Réglages ; le changement suit
+  l'historique du journal et les noms de capteurs.
 - **Postes libres** : une intervention hors postes suivis (tresse de masse, appoint
   d'huile, recherche de panne…) garde son libellé ; les postes personnalisés
   (avec intervalles km/mois et icône) se créent depuis l'onglet Réglages.

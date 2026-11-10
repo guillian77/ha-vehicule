@@ -283,6 +283,95 @@ async def test_definir_poste_et_maj_vehicule(entry, hass, coordinator):
     assert coordinator.vehicule["immatriculation"] == "AB-123-CD"
 
 
+async def test_cout_par_piece_alimente_le_total(entry, hass, coordinator):
+    """Prix unitaires : le coût global retombe sur la somme des pièces."""
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {
+            "type": "vidange",
+            "date": "2026-11-07",
+            "km": 129277,
+            "pieces": [
+                {"nom": "Huile 5W30", "qte": 6, "ref": "LL-04", "prix": 9.9},
+                {"nom": "Filtre à huile", "qte": 1, "ref": "HU-816x", "prix": 12.5},
+            ],
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    intervention = coordinator.interventions[-1]
+    assert intervention["pieces"][0]["prix"] == 9.9
+    assert intervention["cout"] == pytest.approx(71.9)
+
+    # Un coût saisi à la main (main d'œuvre incluse) reste prioritaire.
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {
+            "type": "vidange",
+            "date": "2026-11-08",
+            "km": 129300,
+            "cout": 120,
+            "pieces": [{"nom": "Huile 5W30", "qte": 6, "prix": 9.9}],
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert coordinator.interventions[-1]["cout"] == pytest.approx(120)
+
+
+async def test_export_csv_contient_le_cout_des_pieces(entry, hass, coordinator):
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {
+            "type": "vidange",
+            "date": "2026-11-07",
+            "km": 129277,
+            "pieces": [{"nom": "Huile 5W30", "qte": 2, "prix": 10}],
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    resultat = await hass.services.async_call(
+        DOMAIN, "exporter", {"format": "csv"}, blocking=True, return_response=True
+    )
+    contenu = Path(resultat["chemin"]).read_text(encoding="utf-8-sig")
+    assert "coût pièces (€)" in contenu
+    assert "20.00" in contenu
+    assert "10.00 €/u" in contenu
+
+
+async def test_renommage_poste_suit_journal_et_capteurs(entry, hass, coordinator):
+    """Renommer un poste met à jour l'historique et les noms d'entités."""
+    await hass.services.async_call(
+        DOMAIN,
+        "enregistrer_intervention",
+        {"type": "vidange", "date": "2026-11-07", "km": 129277},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        DOMAIN,
+        "definir_poste",
+        {"poste": "vidange", "nom": "Vidange + filtre à huile"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    poste = next(p for p in coordinator.postes if p["id"] == "vidange")
+    assert poste["nom"] == "Vidange + filtre à huile"
+    assert coordinator.interventions[0]["nom"] == "Vidange + filtre à huile"
+
+    capteur = _sensor_poste(hass, "vidange", "_etat")
+    assert capteur is not None
+    assert "Vidange + filtre à huile" in capteur.attributes["friendly_name"]
+
+
 async def test_persistance_apres_rechargement(hass, entry):
     await hass.services.async_call(
         DOMAIN,

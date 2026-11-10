@@ -172,7 +172,23 @@ const STYLE = `
   .barre-outils { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .barre-outils input, .barre-outils select { width: auto; min-width: 130px; }
 
-  .pieces-editeur .piece-ligne { display: grid; grid-template-columns: 2fr 70px 1.2fr 36px; gap: 8px; margin-bottom: 8px; }
+  .pieces-editeur .pieces-entete, .pieces-editeur .piece-ligne {
+    display: grid; grid-template-columns: 1.5fr 68px 1.9fr 80px 74px 28px;
+    gap: 8px; align-items: center;
+  }
+  .pieces-editeur .pieces-entete {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--secondary-text-color, #727272); margin-bottom: 6px;
+  }
+  .pieces-editeur .pieces-entete span:last-child, .pieces-editeur .pieces-entete .droite {
+    text-align: right;
+  }
+  .pieces-editeur .piece-ligne { margin-bottom: 8px; }
+  .pieces-editeur .piece-ligne .total-piece {
+    font-size: 13px; text-align: right; font-variant-numeric: tabular-nums;
+    color: var(--secondary-text-color, #727272);
+  }
+  .pieces-editeur .total-pieces { text-align: right; font-size: 13px; margin: 4px 0 0; }
 
   .overlay {
     position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.45);
@@ -180,7 +196,7 @@ const STYLE = `
   }
   .boite {
     background: var(--card-background-color, #fff); color: var(--primary-text-color);
-    border-radius: 16px; width: min(680px, 100%); max-height: 90vh; overflow-y: auto;
+    border-radius: 16px; width: min(760px, 100%); max-height: 90vh; overflow-y: auto;
     padding: 20px; box-shadow: 0 12px 40px rgba(0,0,0,.3);
   }
   .boite h2 { margin: 0 0 4px; font-size: 20px; font-weight: 500; }
@@ -214,8 +230,11 @@ const STYLE = `
   @media (max-width: 600px) {
     .page { padding: 12px 10px 40px; }
     .valeur { font-size: 24px; }
-    .pieces-editeur .piece-ligne { grid-template-columns: 1fr 64px; }
-    .pieces-editeur .piece-ligne input.ref { grid-column: 1 / 2; }
+    .pieces-editeur .pieces-entete { display: none; }
+    .pieces-editeur .piece-ligne { grid-template-columns: 1fr 58px; }
+    .pieces-editeur .piece-ligne input.ref,
+    .pieces-editeur .piece-ligne input.prix { grid-column: 1 / 2; }
+    .pieces-editeur .piece-ligne .total-piece { grid-column: 2 / 3; text-align: right; }
     header.barre h1 { font-size: 17px; }
   }
 `;
@@ -437,16 +456,50 @@ class VehiculePanel extends HTMLElement {
         suggere_km: intervention?.prochain?.km ?? "",
         suggere_date: intervention?.prochain?.date || "",
       },
+      cout_auto: "",
       pieces: (intervention?.pieces || []).map((p) => ({
         nom: p.nom || "",
         qte: p.qte ?? "",
         ref: p.ref || "",
+        prix: p.prix ?? "",
       })),
     };
     if (!this._dialogue.pieces.length) {
       this._dialogue.pieces.push({ nom: "", qte: "", ref: "" });
     }
     this._render();
+    this._majTotalPieces();
+  }
+
+  /** Recalcule les totaux de pièces et propose le coût global. */
+  _majTotalPieces() {
+    if (!this._dialogue) return;
+    const lignes = [...this._shadow.querySelectorAll(".piece-ligne")];
+    let total = 0;
+    let chiffre = false;
+    for (const ligne of lignes) {
+      const prix = Number(ligne.querySelector('[name="piece_prix"]')?.value);
+      const qteBrute = ligne.querySelector('[name="piece_qte"]')?.value;
+      const qte = qteBrute === "" || qteBrute === null ? 1 : Number(qteBrute);
+      const valeur = Number.isFinite(prix) ? prix * (Number.isFinite(qte) ? qte : 1) : null;
+      if (valeur !== null) {
+        total += valeur;
+        chiffre = true;
+      }
+      const cellule = ligne.querySelector(".total-piece");
+      if (cellule) cellule.textContent = valeur === null ? "" : euros(valeur);
+    }
+
+    const suggestion = chiffre ? total.toFixed(2) : "";
+    const champ = this._shadow.querySelector('[name="cout"]');
+    if (champ) {
+      const actuel = String(champ.value || "").trim();
+      if (actuel === "" || actuel === this._dialogue.cout_auto) champ.value = suggestion;
+      this._dialogue.form.cout = champ.value;
+    }
+    this._dialogue.cout_auto = suggestion;
+    const resume = this._shadow.querySelector(".total-pieces");
+    if (resume) resume.textContent = chiffre ? `Pièces : ${euros(total)}` : "";
   }
 
   _fermerDialogue() {
@@ -473,6 +526,7 @@ class VehiculePanel extends HTMLElement {
       nom: ligne.querySelector('[name="piece_nom"]')?.value || "",
       qte: ligne.querySelector('[name="piece_qte"]')?.value || "",
       ref: ligne.querySelector('[name="piece_ref"]')?.value || "",
+      prix: ligne.querySelector('[name="piece_prix"]')?.value || "",
     }));
   }
 
@@ -502,6 +556,7 @@ class VehiculePanel extends HTMLElement {
         nom: p.nom,
         qte: p.qte === "" ? null : Number(p.qte),
         ref: p.ref || null,
+        prix: p.prix === "" || p.prix === null ? null : Number(p.prix),
       })),
     };
     if (nom) donnees.nom = nom;
@@ -862,10 +917,20 @@ class VehiculePanel extends HTMLElement {
           ref: piece.ref,
           quantite: 0,
           passages: 0,
+          depense: 0,
+          chiffree: false,
+          dernier_prix: null,
           derniere: null,
         };
-        entree.quantite += Number(piece.qte) || 0;
+        const quantitePiece = Number(piece.qte) || 1;
+        entree.quantite += quantitePiece;
         entree.passages += 1;
+        const prix = piece.prix === null || piece.prix === undefined ? NaN : Number(piece.prix);
+        if (Number.isFinite(prix)) {
+          entree.depense += prix * quantitePiece;
+          entree.chiffree = true;
+          entree.dernier_prix = prix;
+        }
         if (!entree.derniere || String(item.date) > String(entree.derniere.date)) {
           entree.derniere = { date: item.date, km: item.km, poste: item.nom || item.type };
         }
@@ -893,8 +958,9 @@ class VehiculePanel extends HTMLElement {
               <div class="sous">
                 ${piece.passages} passage(s)${piece.quantite ? ` · qté totale ${nombre(piece.quantite, 2)}` : ""}${
                   piece.ref ? ` · réf. ${esc(piece.ref)}` : ""
-                }
+                }${piece.chiffree ? ` · dernier prix ${euros(piece.dernier_prix)}/u` : ""}
               </div>
+              ${piece.chiffree ? `<div class="sous" style="margin-top:2px">Total dépensé : ${euros(piece.depense)}</div>` : ""}
               ${piece.derniere ? `<div class="petit muted">Dernier : ${dateFr(piece.derniere.date)}${
                 piece.derniere.km != null ? ` à ${km(piece.derniere.km)}` : ""
               } (${esc(piece.derniere.poste)})</div>` : ""}
@@ -1003,7 +1069,8 @@ class VehiculePanel extends HTMLElement {
           <tbody>
             ${postes.map((poste) => `
               <tr data-poste="${esc(poste.id)}">
-                <td>${esc(poste.nom)}</td>
+                <td><input class="petit nom" name="poste_nom" value="${esc(poste.nom)}"
+                  style="width:100%;min-width:140px" aria-label="Nom du poste"></td>
                 <td><input class="petit" name="poste_km" type="number" min="0" step="1000"
                   value="${esc(poste.km ?? "")}" style="width:90px"></td>
                 <td><input class="petit" name="poste_mois" type="number" min="0" step="1"
@@ -1094,18 +1161,27 @@ class VehiculePanel extends HTMLElement {
             </datalist>
             <label class="champ">Date<input name="date" type="date" value="${esc(form.date || aujourdhui())}"></label>
             <label class="champ">Kilométrage<input name="km" type="number" min="0" value="${esc(form.km ?? "")}"></label>
-            <label class="champ">Coût (optionnel)<input name="cout" type="number" min="0" step="0.01" value="${esc(form.cout ?? "")}"></label>
+            <label class="champ">Coût total (optionnel)
+              <input name="cout" type="number" min="0" step="0.01" value="${esc(form.cout ?? "")}">
+              <span class="petit muted total-pieces"></span>
+            </label>
             <label class="champ">Garage / intervenant<input name="garage" value="${esc(form.garage || "")}"></label>
             <label class="champ wide">Notes<textarea name="notes">${esc(form.notes || "")}</textarea></label>
           </div>
 
           <h3 style="margin:16px 0 8px;font-size:14px">Pièces</h3>
           <div class="pieces-editeur">
+            <div class="pieces-entete">
+              <span>Désignation</span><span>Qté</span><span>Référence</span>
+              <span>P.U. €</span><span class="droite">Total</span><span></span>
+            </div>
             ${pieces.map((piece, index) => `
               <div class="piece-ligne" data-index="${index}">
                 <input name="piece_nom" placeholder="Désignation" value="${esc(piece.nom)}">
                 <input name="piece_qte" type="number" step="0.1" min="0" placeholder="Qté" value="${esc(piece.qte ?? "")}">
                 <input class="ref" name="piece_ref" placeholder="Référence" value="${esc(piece.ref || "")}">
+                <input class="prix" name="piece_prix" type="number" step="0.01" min="0" placeholder="P.U. €" value="${esc(piece.prix ?? "")}">
+                <span class="total-piece"></span>
                 <button class="icone" type="button" data-action="retirer-piece" data-index="${index}" title="Retirer">
                   <ha-icon icon="mdi:close"></ha-icon></button>
               </div>`).join("")}
@@ -1180,6 +1256,7 @@ class VehiculePanel extends HTMLElement {
         this._lireFormulaire();
         this._dialogue.pieces.push({ nom: "", qte: "", ref: "" });
         this._render();
+        this._majTotalPieces();
         this._shadow.querySelector('.piece-ligne:last-of-type input')?.focus();
         break;
       case "retirer-piece":
@@ -1187,6 +1264,7 @@ class VehiculePanel extends HTMLElement {
         this._dialogue.pieces.splice(Number(cible.dataset.index), 1);
         if (!this._dialogue.pieces.length) this._dialogue.pieces.push({ nom: "", qte: "", ref: "" });
         this._render();
+        this._majTotalPieces();
         break;
       case "sauver-poste":
         this._sauverPoste(cible.dataset.poste);
@@ -1215,6 +1293,11 @@ class VehiculePanel extends HTMLElement {
       }
       if (champ?.name === "nom_libre") {
         this._dialogue.form.nom_libre = champ.value;
+        return;
+      }
+      if (champ?.name === "piece_prix" || champ?.name === "piece_qte") {
+        this._lireFormulaire();
+        this._majTotalPieces();
         return;
       }
     }
@@ -1329,13 +1412,17 @@ class VehiculePanel extends HTMLElement {
     const kmValeur = ligne.querySelector('[name="poste_km"]')?.value;
     const moisValeur = ligne.querySelector('[name="poste_mois"]')?.value;
     const actif = ligne.querySelector('[name="poste_actif"]')?.checked;
-    const ok = await this._appelerService("definir_poste", {
+    const nomValeur = (ligne.querySelector('[name="poste_nom"]')?.value || "").trim();
+    const donnees = {
       poste: posteId,
       km: kmValeur === "" ? null : Number(kmValeur),
       mois: moisValeur === "" ? null : Number(moisValeur),
       actif: !!actif,
-    });
-    if (ok !== null) this._toast("Intervalle enregistré");
+    };
+    // Le libellé reste facultatif : un champ vidé ne renomme rien.
+    if (nomValeur) donnees.nom = nomValeur;
+    const ok = await this._appelerService("definir_poste", donnees);
+    if (ok !== null) this._toast(nomValeur ? "Poste et libellé enregistrés" : "Intervalle enregistré");
   }
 
   async _exporter(format) {
