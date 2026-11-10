@@ -1,13 +1,21 @@
 {
   "domain": "vehicule",
   "name": "Véhicule — Carnet d'entretien",
-  "codeowners": ["@guillian77"],
+  "codeowners": [
+    "@guillian77"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "websocket_api", "calendar", "panel_custom"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "websocket_api",
+    "calendar",
+    "panel_custom"
+  ],
   "documentation": "https://github.com/guillian77/ha-vehicule",
   "integration_type": "service",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/guillian77/ha-vehicule/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
