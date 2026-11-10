@@ -49,7 +49,11 @@ const STYLE = `
     font-size: 20px; font-weight: 500; margin: 0; flex: 1;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .bouton-entete { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; }
+  .bouton-entete {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px;
+    color: var(--text-primary-color, #fff);
+  }
+  .bouton-entete .texte { color: inherit; }
   .bouton-entete ha-icon { --mdc-icon-size: 18px; }
   .km-pastille {
     display: inline-flex; align-items: center; gap: 6px;
@@ -252,7 +256,7 @@ const STYLE = `
     .pieces-editeur .piece-ligne .total-piece { grid-column: 2 / 3; text-align: right; }
     header.barre h1 { font-size: 17px; }
     .bouton-entete { padding: 7px 10px; }
-    .bouton-entete .libelle { display: none; }
+    .bouton-entete .texte { display: none; }
   }
 `;
 
@@ -658,7 +662,7 @@ class VehiculePanel extends HTMLElement {
         ${this._narrow ? `<button class="menu" data-action="menu" aria-label="Menu"><ha-icon icon="mdi:menu"></ha-icon></button>` : ""}
         <h1>${esc(nom)}</h1>
         <button class="action primaire bouton-entete" data-action="nouvelle" title="Nouvelle intervention">
-          <ha-icon icon="mdi:plus"></ha-icon><span class="libelle">Intervention</span>
+          <ha-icon icon="mdi:plus"></ha-icon><span class="texte">Intervention</span>
         </button>
         <span class="km-pastille"><ha-icon icon="mdi:counter"></ha-icon>${km(kmActuel)}</span>
       </header>
