@@ -1,9 +1,5 @@
 # Véhicule — Carnet d'entretien pour Home Assistant
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![Tests](https://github.com/guillian77/ha-vehicule/actions/workflows/tests.yml/badge.svg)](https://github.com/guillian77/ha-vehicule/actions/workflows/tests.yml)
-[![Release](https://img.shields.io/github/v/release/guillian77/ha-vehicule)](https://github.com/guillian77/ha-vehicule/releases)
-
 Intégration personnalisée : journal d'entretien d'un véhicule, échéances calculées
 automatiquement, rappels, calendrier et panneau dédié dans la barre latérale.
 
@@ -45,15 +41,11 @@ déplacé en `.corrompu-<horodatage>` au lieu d'être écrasé.
 
 ## Installation
 
-### HACS (recommandé)
+### HACS (dépôt personnalisé)
 
 1. HACS → Intégrations → menu ⋮ → *Dépôts personnalisés*.
-2. Ajouter `https://github.com/guillian77/ha-vehicule`, catégorie **Integration**.
-3. Chercher « Véhicule — Carnet d'entretien », installer la version proposée.
-4. Redémarrer Home Assistant, puis Paramètres → Appareils et services → *Ajouter une
-   intégration* → **Véhicule — Carnet d'entretien**.
-
-Les mises à jour apparaissent ensuite dans HACS (une release GitHub = une version).
+2. URL du dépôt, catégorie *Integration*.
+3. Installer, puis redémarrer Home Assistant.
 
 ### Manuelle
 
@@ -127,7 +119,7 @@ action:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -r requirements_test.txt home-assistant-frontend
+pip install -r requirements_test.txt
 pytest
 ```
 
